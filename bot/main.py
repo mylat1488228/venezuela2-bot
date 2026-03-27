@@ -10,14 +10,29 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GUILD_ID = int(os.getenv("GUILD_ID", "0"))
-ADMIN_USERS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x]
+# Безопасное получение GUILD_ID с проверкой
+guild_id_str = os.getenv("GUILD_ID", "0")
+try:
+    GUILD_ID = int(guild_id_str)
+except (ValueError, TypeError):
+    GUILD_ID = 0
+    print(f"⚠️ Предупреждение: GUILD_ID не задан или неверен: {guild_id_str}")
+
+ADMIN_USERS = []
+admin_ids_str = os.getenv("ADMIN_IDS", "")
+if admin_ids_str:
+    try:
+        ADMIN_USERS = [int(x.strip()) for x in admin_ids_str.split(",") if x.strip()]
+    except ValueError:
+        print("⚠️ Предупреждение: ADMIN_IDS имеет неверный формат")
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-intents = nextcord.Intents.all()
-intents.members = True
-intents.presences = True
-intents.message_content = True
+# Проверка обязательных переменных
+if not BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN не задан! Добавьте в Railway Variables")
+if not DATABASE_URL:
+    print("⚠️ DATABASE_URL не задан, база данных не будет работать")
 
 class VenezuelaBot(commands.Bot):
     def __init__(self):
