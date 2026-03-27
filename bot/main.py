@@ -7,10 +7,11 @@ import asyncpg
 import datetime
 from dotenv import load_dotenv
 
+# Загружаем переменные окружения
 load_dotenv()
 
+# Получаем настройки с проверками
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-# Безопасное получение GUILD_ID с проверкой
 guild_id_str = os.getenv("GUILD_ID", "0")
 try:
     GUILD_ID = int(guild_id_str)
@@ -31,14 +32,21 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # Проверка обязательных переменных
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN не задан! Добавьте в Railway Variables")
+
 if not DATABASE_URL:
     print("⚠️ DATABASE_URL не задан, база данных не будет работать")
+
+# Определяем intents (ОБЯЗАТЕЛЬНО ДО КЛАССА!)
+intents = nextcord.Intents.all()
+intents.members = True
+intents.presences = True
+intents.message_content = True
 
 class VenezuelaBot(commands.Bot):
     def __init__(self):
         super().__init__(
             command_prefix="!",
-            intents=intents,
+            intents=intents,  # Теперь intents определен выше
             help_command=None,
             owner_ids=set(ADMIN_USERS)
         )
@@ -46,22 +54,21 @@ class VenezuelaBot(commands.Bot):
         self.db_pool = None
         
     async def setup_hook(self):
+        """Вызывается при запуске бота"""
         print("🔄 Подключение к базе данных...")
-        print(f"DATABASE_URL: {DATABASE_URL[:20]}... (проверка)")
         
-        if not DATABASE_URL:
-            print("❌ ОШИБКА: DATABASE_URL не найден! Добавьте переменную в Railway.")
-            return
-            
-        try:
-            self.db_pool = await asyncpg.create_pool(DATABASE_URL)
-            await self.init_database()
-            print("✅ База данных подключена")
-        except Exception as e:
-            print(f"❌ Ошибка подключения к БД: {e}")
-            print("⚠️ Бот работает БЕЗ базы данных (ограниченный функционал)")
+        if DATABASE_URL:
+            try:
+                self.db_pool = await asyncpg.create_pool(DATABASE_URL)
+                await self.init_database()
+                print("✅ База данных подключена")
+            except Exception as e:
+                print(f"❌ Ошибка подключения к БД: {e}")
+                self.db_pool = None
+        else:
+            print("⚠️ DATABASE_URL не найден, работаем без БД")
         
-        # Загружаем модули
+        # Загружаем модули (cogs)
         cogs = [
             'cogs.verification',
             'cogs.minecraft', 
@@ -75,15 +82,17 @@ class VenezuelaBot(commands.Bot):
         for cog in cogs:
             try:
                 self.load_extension(cog)
-                print(f"✅ {cog} загружен")
+                print(f"✅ Модуль {cog} загружен")
             except Exception as e:
                 print(f"❌ Ошибка {cog}: {e}")
         
-        # Синхронизация команд
+        # Синхронизируем slash-команды
         if GUILD_ID:
             guild = nextcord.Object(id=GUILD_ID)
             await self.tree.sync(guild=guild)
-            print(f"🔄 Команды синхронизированы для {GUILD_ID}")
+            print(f"🔄 Команды синхронизированы для сервера {GUILD_ID}")
+        else:
+            print("⚠️ GUILD_ID не задан, команды не синхронизированы!")
         
     async def init_database(self):
         """Создание таблиц в БД"""
@@ -105,6 +114,7 @@ class VenezuelaBot(commands.Bot):
                     last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS tickets (
                     ticket_id SERIAL PRIMARY KEY,
@@ -117,6 +127,7 @@ class VenezuelaBot(commands.Bot):
                     transcript TEXT
                 )
             ''')
+            
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS market_ads (
                     ad_id SERIAL PRIMARY KEY,
@@ -130,6 +141,7 @@ class VenezuelaBot(commands.Bot):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS private_channels (
                     channel_id BIGINT PRIMARY KEY,
@@ -141,6 +153,7 @@ class VenezuelaBot(commands.Bot):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS reports (
                     report_id SERIAL PRIMARY KEY,
@@ -152,10 +165,26 @@ class VenezuelaBot(commands.Bot):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            print("✅ Таблицы созданы")
+            
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS logs (
+                    log_id SERIAL PRIMARY KEY,
+                    event_type VARCHAR(50),
+                    user_id BIGINT,
+                    target_id BIGINT,
+                    content TEXT,
+                    channel_id BIGINT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            print("✅ Таблицы БД созданы")
     
     async def on_ready(self):
+        """Бот готов"""
         print(f"🚀 Бот {self.user} запущен!")
+        print(f"📡 Обслуживается сервер: {self.guild_id}")
+        
         await self.change_presence(
             activity=nextcord.Activity(
                 type=nextcord.ActivityType.watching,
@@ -164,15 +193,11 @@ class VenezuelaBot(commands.Bot):
         )
     
     async def on_message(self, message):
-        """Обработка сообщений с проверкой БД"""
+        """Обработка сообщений"""
         if message.author.bot or not message.guild:
             return
             
-        if message.guild.id == self.guild_id:
-            # Если БД не подключена - пропускаем XP начисление
-            if not self.db_pool:
-                return
-                
+        if message.guild.id == self.guild_id and self.db_pool:
             try:
                 xp_gain = min(len(message.content) // 10, 50) + 1
                 
@@ -191,50 +216,16 @@ class VenezuelaBot(commands.Bot):
                             INSERT INTO users (user_id, username, xp, messages)
                             VALUES ($1, $2, $3, 1)
                         ''', message.author.id, message.author.name, xp_gain)
-                        return
-                    
-                    current_xp = result['xp']
-                    current_level = result['level']
-                    new_level = int((current_xp / 100) ** 0.5) + 1
-                    
-                    if new_level > current_level:
-                        await conn.execute('''
-                            UPDATE users SET level = $1 WHERE user_id = $2
-                        ''', new_level, message.author.id)
                         
-                        role_name = f"Уровень {new_level}"
-                        role = nextcord.utils.get(message.guild.roles, name=role_name)
-                        if not role:
-                            try:
-                                role = await message.guild.create_role(name=role_name, color=0x3498db)
-                            except:
-                                pass
-                        
-                        if role:
-                            await message.author.add_roles(role)
-                            await message.channel.send(
-                                f"🎊 {message.author.mention} достиг уровня **{new_level}**!"
-                            )
             except Exception as e:
-                print(f"Ошибка в on_message: {e}")
+                print(f"Ошибка обработки сообщения: {e}")
         
         await self.process_commands(message)
-    
-    async def log_event(self, event_type, user_id, target_id=None, content=None, channel_id=None):
-        """Логирование (если БД доступна)"""
-        if not self.db_pool:
-            return
-            
-        try:
-            async with self.db_pool.acquire() as conn:
-                await conn.execute('''
-                    INSERT INTO logs (event_type, user_id, target_id, content, channel_id)
-                    VALUES ($1, $2, $3, $4, $5)
-                ''', event_type, user_id, target_id, content, channel_id)
-        except:
-            pass
 
+# Создаем и запускаем бота
 bot = VenezuelaBot()
 
+if __name__ == "__main__":
+    bot.run(BOT_TOKEN)
 if __name__ == "__main__":
     bot.run(BOT_TOKEN)
