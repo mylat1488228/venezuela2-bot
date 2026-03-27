@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Venezuela2</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body {
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            height: 100vh;
+            background: #1e293b;
+            padding: 20px;
+            border-right: 1px solid #334155;
+        }
+        .logo {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 30px;
+            color: #38bdf8;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #334155;
+        }
+        .nav-item {
+            padding: 12px;
+            margin: 5px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .nav-item:hover { background: #334155; }
+        .main-content {
+            margin-left: 250px;
+            padding: 30px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #334155;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #38bdf8;
+            margin-top: 10px;
+        }
+        .section {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #334155;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .badge-pending { background: #f59e0b; color: #000; }
+        .badge-open { background: #10b981; color: #000; }
+        .logout {
+            position: absolute;
+            bottom: 20px;
+            width: 210px;
+            padding: 12px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">🇻🇪 Venezuela2</div>
+        <div class="nav-item">📊 Обзор</div>
+        <div class="nav-item">🎫 Тикеты</div>
+        <div class="nav-item">🚨 Репорты</div>
+        <div class="nav-item">🏪 Рынок</div>
+        <div class="nav-item">👥 Пользователи</div>
+        <div class="nav-item">⚙️ Настройки</div>
+        <a href="/logout" class="logout">Выйти</a>
+    </div>
+    
+    <div class="main-content">
+        <div class="header">
+            <h1>Панель управления</h1>
+            <div>Привет, <strong>{{ username }}</strong> 👋</div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div style="opacity: 0.7;">Пользователей</div>
+                <div class="stat-value">{{ stats.users or 0 }}</div>
+            </div>
+            <div class="stat-card">
+                <div style="opacity: 0.7;">Сообщений</div>
+                <div class="stat-value">{{ stats.total_messages or 0 }}</div>
+            </div>
+            <div class="stat-card">
+                <div style="opacity: 0.7;">Часов в войсе</div>
+                <div class="stat-value">{{ stats.total_voice or 0 }}</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🚨 Последние репорты</h2>
+            {% for report in reports %}
+            <div style="padding: 10px; border-bottom: 1px solid #334155;">
+                <strong>{{ report.target_name }}</strong> 
+                <span class="badge badge-pending">{{ report.status }}</span>
+                <br>
+                <small style="opacity: 0.7;">{{ report.reason }}</small>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="section">
+            <h2>🎫 Открытые тикеты ({{ tickets|length }})</h2>
+            {% for ticket in tickets %}
+            <div style="padding: 10px; border-bottom: 1px solid #334155;">
+                Тикет #{{ ticket.ticket_id }} 
+                <span class="badge badge-open">{{ ticket.status }}</span>
+                <br>
+                <small style="opacity: 0.7;">Категория: {{ ticket.category }}</small>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>
