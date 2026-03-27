@@ -1,5 +1,7 @@
 import os
 import asyncio
+import signal
+import sys
 import nextcord
 from nextcord.ext import commands, tasks
 from nextcord import Interaction
@@ -46,7 +48,7 @@ class VenezuelaBot(commands.Bot):
     def __init__(self):
         super().__init__(
             command_prefix="!",
-            intents=intents,  # Теперь intents определен выше
+            intents=intents,
             help_command=None,
             owner_ids=set(ADMIN_USERS)
         )
@@ -88,9 +90,12 @@ class VenezuelaBot(commands.Bot):
         
         # Синхронизируем slash-команды
         if GUILD_ID:
-            guild = nextcord.Object(id=GUILD_ID)
-            await self.tree.sync(guild=guild)
-            print(f"🔄 Команды синхронизированы для сервера {GUILD_ID}")
+            try:
+                guild = nextcord.Object(id=GUILD_ID)
+                await self.tree.sync(guild=guild)
+                print(f"🔄 Команды синхронизированы для сервера {GUILD_ID}")
+            except Exception as e:
+                print(f"⚠️ Ошибка синхронизации команд: {e}")
         else:
             print("⚠️ GUILD_ID не задан, команды не синхронизированы!")
         
@@ -221,11 +226,39 @@ class VenezuelaBot(commands.Bot):
                 print(f"Ошибка обработки сообщения: {e}")
         
         await self.process_commands(message)
+    
+    async def close(self):
+        """Корректное закрытие"""
+        print("👋 Закрытие бота...")
+        if self.db_pool:
+            await self.db_pool.close()
+        await super().close()
 
-# Создаем и запускаем бота
+# Создаем бота
 bot = VenezuelaBot()
 
+# Обработка сигналов для Railway (важно!)
+def signal_handler(sig, frame):
+    print("\n👋 Получен сигнал остановки")
+    asyncio.create_task(bot.close())
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
+
+# Запуск
 if __name__ == "__main__":
-    bot.run(BOT_TOKEN)
-if __name__ == "__main__":
-    bot.run(BOT_TOKEN)
+    try:
+        bot.run(BOT_TOKEN, reconnect=True)
+    except KeyboardInterrupt:
+        print("👋 Бот остановлен пользователем")
+    except Exception as e:
+        print(f"❌ Критическая ошибка: {e}")
+        # Перезапускаем event loop если закрыт
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                asyncio.set_event_loop(asyncio.new_event_loop())
+                bot.run(BOT_TOKEN)
+        except:
+            pass
